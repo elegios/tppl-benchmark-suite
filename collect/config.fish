@@ -25,26 +25,37 @@ runInRepo tppl make
 setMetadataKV tpplHash (repoCommitHash tppl)
 
 # We initialize all tests with the same seed across the run, to try to
-# maximize the odds of similarly configured tests behaving similarly.
-set seed (random)
-setMetadataKV seed $seed
+# maximize the odds of similarly configured tests behaving
+# similarly. We also run tests meant to measure performance multiple
+# times with different seeds, since different random choices may
+# easily take different execution paths and thus have different
+# performance.
+set max_runs 200
+set seeds (for i in (seq $max_runs); random; end)
+setMetadataKV seeds (asJsonList $seeds)
 
 
 # === Test runner, including the specification for the output ===
 
 # Assumes the input data can be found adjacent to the model, e.g., if
 # `model` is `path/to/foo.tppl` then the data is `path/to/foo.json`.
-function runTest --argument-names model
-    set -l flags $argv[2..]
+function runTests --argument-names c model
+    set -l flags $argv[3..]
     set -l data (path change-extension .json $model)
+    set -l exitCodes
     set -l startTime (date +%s)
-    command time --format '{"maxMemoryKB":%M,"totalDurationS":%e}' --output compile-perf.json tpplc $model --output exe $flags
-    and command time --format '{"maxMemoryKB":%M,"totalDurationS":%e}' --output perf.json ./exe $data > samples.json 2> debug-info.json
-    setMetadataKV exitCode $status
+    for i in (seq $c)
+        command time --format '{"maxMemoryKB":%M,"totalDurationS":%e}' --output $i.compile-perf.json tpplc $model --output exe --seed $seeds[$i] $flags
+        and command time --format '{"maxMemoryKB":%M,"totalDurationS":%e}' --output $i.perf.json ./exe $data > $i.samples.json 2> $i.debug-info.json
+        set -a exitCodes $status
+    end
     set -l endTime (date +%s)
+    setMetadataKV exitCodes (asJsonList $exitCodes)
     setMetadataKV model $model
     setMetadataKV data $data
-    setMetadataKV flags (string join " " -- (string escape -- $flags))
+    setMetadataKV numRuns $c
+    setMetadataKV seeds (asJsonList $seeds[..$c])
+    setMetadataKV flags (asJsonList (string escape -- $flags))
     setMetadataKV totalDurationS (math $endTime - $startTime)
     rm -f exe
 end
@@ -57,14 +68,29 @@ set models phylogeny/clads.tppl phylogeny/crbd.tppl lang/coin.tppl
 for m in $models
     setDir correctness/(path basename --no-extension $m)
     set -l model (repoPath tppl)/models/$m
-    set -l commonOpts --seed $seed --particles 10000
+    set -l commonOpts --particles 10000
     if defineTest mcmc-lightweight-cps-full
-        runTest $model -m mcmc-lightweight --cps full --debug-iterations $commonOpts
+        runTests 1 $model -m mcmc-lightweight --cps full --debug-iterations $commonOpts
     end
     if defineTest mcmc-lightweight-cps-partial
-        runTest $model -m mcmc-lightweight --cps partial --debug-iterations $commonOpts
+        runTests 1 $model -m mcmc-lightweight --cps partial --debug-iterations $commonOpts
     end
     if defineTest mcmc-lightweight-cps-none
-        runTest $model -m mcmc-lightweight --cps none --debug-iterations $commonOpts
+        runTests 1 $model -m mcmc-lightweight --cps none --debug-iterations $commonOpts
+    end
+end
+
+for m in $models
+    setDir performance/(path basename --no-extension $m)
+    set -l model (repoPath tppl)/models/$m
+    set -l commonOpts --particles 10000
+    if defineTest mcmc-lightweight-cps-full
+        runTests 20 $model -m mcmc-lightweight --cps full $commonOpts
+    end
+    if defineTest mcmc-lightweight-cps-partial
+        runTests 20 $model -m mcmc-lightweight --cps partial $commonOpts
+    end
+    if defineTest mcmc-lightweight-cps-none
+        runTests 20 $model -m mcmc-lightweight --cps none $commonOpts
     end
 end

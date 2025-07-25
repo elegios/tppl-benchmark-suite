@@ -150,6 +150,12 @@ function setMetadataKV --argument-names key value
     end
 end
 
+# Take the supplied list of arguments and turn them into a json list,
+# interpreting each value as is if it parses, otherwise as a string.
+function asJsonList
+    string join0 -- $argv | jq -Rsc 'rtrimstr("\u0000") | split("\u0000") | map(try fromjson // .)'
+end
+
 
 # === Setup tests ===
 

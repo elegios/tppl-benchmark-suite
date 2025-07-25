@@ -1,9 +1,14 @@
 import pandas
+import numpy as np
 import json
 import os
+import zipfile
+import sys
 
-def simple_perf_row(path):
-    """Produce a dict describing a row suitable for inclusion in a
+from util import iter_test_dirs
+
+def simple_perf_row(path, res):
+    """Add dicts describing a row suitable for inclusion in a
     dataframe, describing the "simple" performance metrics available
     in the collected data, i.e., those that result in a single number
     per test.
@@ -11,20 +16,21 @@ def simple_perf_row(path):
     """
     with (path / "metadata.json").open() as f:
         metadata = json.load(f)
-    with (path / "perf.json").open() as f:
-        perf = json.load(f)
-    with (path / "compile-perf.json").open() as f:
-        compile_perf = json.load(f)
-
-    return {
-        'model': metadata['model'],
-        'data': metadata['data'],
-        'flags': metadata['flags'],
-        'runMaxMemory': perf['maxMemoryKB'],
-        'runTime': perf['totalDurationS'],
-        'compileMaxMemory': compile_perf['maxMemoryKB'],
-        'compileTime': compile_perf['totalDurationS'],
-    }
+    for i in range(1, metadata["numRuns"]):
+        with (path / f"{i}.perf.json").open() as f:
+            perf = json.load(f)
+        with (path / f"{i}.compile-perf.json").open() as f:
+            compile_perf = json.load(f)
+        res.append({
+            'model': metadata['model'],
+            'data': metadata['data'],
+            'flags': metadata['flags'],
+            'runIdx': i,
+            'runMaxMemory': perf['maxMemoryKB'],
+            'runTime': perf['totalDurationS'],
+            'compileMaxMemory': compile_perf['maxMemoryKB'],
+            'compileTime': compile_perf['totalDurationS'],
+        })
 
 def simple_perf_for_all(root, simplify_paths=True):
     """Produce a pandas dataframe of simple performance data (i.e.,
@@ -36,7 +42,7 @@ def simple_perf_for_all(root, simplify_paths=True):
 
     Example usage:
 
-    with zipfile.open("path/to/archive.zip", "r") as archive:
+    with zipfile.ZipFile("path/to/archive.zip", "r") as archive:
         root = zipfile.Path(archive)
         simple_perf_for_all(root)
 
@@ -46,7 +52,7 @@ def simple_perf_for_all(root, simplify_paths=True):
         if dir.is_file():
             continue
         for test in iter_test_dirs(dir):
-            rows.append(simple_perf_row(test))
+            simple_perf_row(test, rows)
     df = pandas.DataFrame.from_records(rows)
     if simplify_paths:
         common = os.path.commonprefix(list(df['model']))
@@ -54,3 +60,16 @@ def simple_perf_for_all(root, simplify_paths=True):
         common = os.path.commonprefix(list(df['data']))
         df['data'] = df['data'].map(lambda p: p.removeprefix(common))
     return df
+
+
+if __name__  == '__main__':
+    with zipfile.ZipFile(sys.argv[1], "r") as archive:
+        root = zipfile.Path(archive)
+        df = simple_perf_for_all(root)
+        df['idx'] = np.arange(df.shape[0])
+        with pandas.option_context('display.max_rows', None, 'display.max_columns', None):  # more options can be specified also
+            df['flags'] = df['flags'].map(lambda x: ' '.join(set(x) & {'full', 'partial', 'none'}))
+            timing = df.pivot(index=['model','data','runIdx'], columns=['flags'], values=['runTime'])
+            timing['runTime','fullP'] = timing['runTime','full']/timing['runTime','none']
+            timing['runTime','partialP'] = timing['runTime','partial']/timing['runTime','none']
+            print(timing)

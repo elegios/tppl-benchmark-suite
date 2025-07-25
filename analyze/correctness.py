@@ -60,9 +60,9 @@ def correctness(path):
 
     with (path / "metadata.json").open() as f:
         metadata = json.load(f)
-    with (path / "samples.json").open() as f:
+    with (path / "1.samples.json").open() as f:
         samples = json.load(f)
-    with (path / "debug-info.json").open() as f:
+    with (path / "1.debug-info.json").open() as f:
         debug_info = f.readlines()
 
     ##Format
@@ -99,10 +99,16 @@ def correctness(path):
 def correctness_for_all(root):
     """Example usage:
 
-    with zipfile.open("path/to/archive.zip", "r") as archive:
+    with zipfile.ZipFile("path/to/archive.zip", "r") as archive:
         root = zipfile.Path(archive)
-        correctness_for_all(root)
+        df = correctness_for_all(root)
 
     """
     for test in iter_test_dirs(root / "correctness"):
         correctness(test)
+
+
+if __name__  == '__main__':
+    with zipfile.ZipFile(sys.argv[1], "r") as archive:
+        root = zipfile.Path(archive)
+        correctness_for_all(root)
