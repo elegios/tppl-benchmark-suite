@@ -7,7 +7,7 @@ import sys
 
 from util import iter_test_dirs
 
-def simple_perf_row(path, res):
+def add_simple_perf_row(path, res):
     """Add dicts describing a row suitable for inclusion in a
     dataframe, describing the "simple" performance metrics available
     in the collected data, i.e., those that result in a single number
@@ -52,8 +52,12 @@ def simple_perf_for_all(root, simplify_paths=True):
         if dir.is_file():
             continue
         for test in iter_test_dirs(dir):
-            simple_perf_row(test, rows)
+            add_simple_perf_row(test, rows)
     df = pandas.DataFrame.from_records(rows)
+    with (root / "metadata.json").open() as f:
+        s = json.load(f)["secondsSinceEpochAtStart"]
+        print(s)
+        df['runStart'] = pandas.to_datetime(s, unit="s")
     if simplify_paths:
         common = os.path.commonprefix(list(df['model']))
         df['model'] = df['model'].map(lambda p: p.removeprefix(common))
@@ -63,13 +67,13 @@ def simple_perf_for_all(root, simplify_paths=True):
 
 
 if __name__  == '__main__':
-    with zipfile.ZipFile(sys.argv[1], "r") as archive:
-        root = zipfile.Path(archive)
-        df = simple_perf_for_all(root)
-        df['idx'] = np.arange(df.shape[0])
-        with pandas.option_context('display.max_rows', None, 'display.max_columns', None):  # more options can be specified also
-            df['flags'] = df['flags'].map(lambda x: ' '.join(set(x) & {'full', 'partial', 'none'}))
-            timing = df.pivot(index=['model','data','runIdx'], columns=['flags'], values=['runTime'])
-            timing['runTime','fullP'] = timing['runTime','full']/timing['runTime','none']
-            timing['runTime','partialP'] = timing['runTime','partial']/timing['runTime','none']
-            print(timing)
+    dfs = []
+    for p in sys.argv[1:]:
+        with zipfile.ZipFile(p, "r") as archive:
+            root = zipfile.Path(archive)
+            dfs.append(simple_perf_for_all(root))
+    df = pandas.concat(dfs)
+    df['flags'] = df['flags'].map(lambda x: ' '.join(set(x) & {'full', 'partial', 'none'}))
+    timing = df.pivot(index=['model','data','runIdx'], columns=['runStart', 'flags'], values=['runTime'])
+    with pandas.option_context('display.max_rows', None, 'display.max_columns', None):
+        print(timing)

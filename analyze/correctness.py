@@ -7,6 +7,7 @@ import math
 import numpy
 import scipy
 import zipfile
+import sys
 
 import matplotlib.pyplot as plt
 import scipy.stats
@@ -94,7 +95,9 @@ def correctness(path):
 
     # Visualize the results using Seaborn and Matplotlib
     fig = sns.lineplot(x="samples", y="cumul_p", hue=model, data=repres)
-    fig.get_figure().savefig(path+"/kstest_pvalue_"+f'{kstest_res.pvalue:.4f}'+".png")
+    # TODO(vipa, 2025-07-31): Better output here
+    plt.show(block=True)
+    # fig.get_figure().show() # .savefig(path+"/kstest_pvalue_"+f'{kstest_res.pvalue:.4f}'+".png")
 
 def correctness_for_all(root):
     """Example usage:

@@ -32,8 +32,21 @@ The experiment runner is structured as two scripts:
 Typical usage is as follows:
 
 ```bash
-./run.fish out.zip  # Run all tests, put data in `out.zip`
+# Run all tests, put data in `out.zip`
+collect/run.fish out.zip --config-file collect/config.fish
 ```
 
 
 ## Analyzing Collected Data
+
+Analysis can be done by either:
+
+- Importing `analyze/correctness.py` or `analyze/performance.py` in a
+  Python session and using the exposed functions, or
+- Running `python3 analyze/correctness.py out.zip` or `python3
+  analyze/performance.py out.zip`. Note that `performance.py` accepts
+  an arbitrary number of archives to compare, while `correctness.py`
+  expects a single archive.
+
+The former is more flexible, while the latter gives a reasonable
+default analysis.
