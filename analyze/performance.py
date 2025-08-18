@@ -17,10 +17,18 @@ def add_simple_perf_row(path, res):
     with (path / "metadata.json").open() as f:
         metadata = json.load(f)
     for i in range(1, metadata["numRuns"]):
-        with (path / f"{i}.perf.json").open() as f:
-            perf = json.load(f)
-        with (path / f"{i}.compile-perf.json").open() as f:
-            compile_perf = json.load(f)
+        try:
+            with (path / f"{i}.perf.json").open() as f:
+                perf = json.load(f)
+        except:
+            print("Failed to load json: " + str(path / f"{i}.perf.json"))
+            return
+        try:
+            with (path / f"{i}.compile-perf.json").open() as f:
+                compile_perf = json.load(f)
+        except:
+            print("Failed to load json: " + str(path / f"{i}.compile-perf.json"))()
+            return
         res.append({
             'model': metadata['model'],
             'data': metadata['data'],
@@ -48,11 +56,8 @@ def simple_perf_for_all(root, simplify_paths=True):
 
     """
     rows = []
-    for dir in root.iterdir():
-        if dir.is_file():
-            continue
-        for test in iter_test_dirs(dir):
-            add_simple_perf_row(test, rows)
+    for test in iter_test_dirs(root / 'performance'):
+        add_simple_perf_row(test, rows)
     df = pandas.DataFrame.from_records(rows)
     with (root / "metadata.json").open() as f:
         s = json.load(f)["secondsSinceEpochAtStart"]
@@ -73,7 +78,7 @@ if __name__  == '__main__':
             root = zipfile.Path(archive)
             dfs.append(simple_perf_for_all(root))
     df = pandas.concat(dfs)
-    df['flags'] = df['flags'].map(lambda x: ' '.join(set(x) & {'full', 'partial', 'none'}))
+    df['flags'] = df['flags'].map(lambda x: ' '.join(map(str, x)))
     timing = df.pivot(index=['model','data','runIdx'], columns=['runStart', 'flags'], values=['runTime'])
-    with pandas.option_context('display.max_rows', None, 'display.max_columns', None):
+    with pandas.option_context('display.max_rows', None, 'display.max_columns', None, 'display.width', 1000000000000):
         print(timing)

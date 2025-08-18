@@ -90,6 +90,11 @@ function _finalCleanup --on-event fish_exit
     end
 end
 
+function overwriteCurrentLine --argument-names msg
+    echo -ne "\33[2K\r"
+    echo -n $msg
+end
+
 
 # === Setup repositories ===
 
@@ -181,7 +186,7 @@ function defineTest --argument-names name
         echo "Skipping duplicate definition of test $testName"
         status stack-trace
         return 1
-    else if set -q filter and not string match -- "$filter" $testName
+    else if set -q filter; and not string match --regex --quiet -- "$filter" $testName
         echo "Skipping test $testName"
         return 1
     else
